@@ -307,3 +307,8 @@ class TocabiMobile():
             pass
 
             # self.command[0] = lin_velocity[0] * 3.1415926535 
+
+if __name__ == "__main__":
+    tm = TocabiMobile()
+    tm.connect()
+    tm.run()
