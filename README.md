@@ -11,5 +11,8 @@ pip3 install numpy
 `python3 rospy_command.py` :
 Mobile command using `/cmd_vel`. 
 
+`python3 ps4_command.py` :
+Mobile command using PS4 controller
+
 
 `python3 tocabi_mobile_recovery.py` : Can communication reset when it got faults
