@@ -239,6 +239,42 @@ class TocabiMobile():
         self.change_status(status='PRE-OPERATIONAL')
         self.change_status(status='OPERATIONAL')
 
+    def recovery(self):
+        """
+        1. Connect to CAN Network
+        """
+        network = self.network
+        network.scanner.search()
+        time.sleep(0.5)
+        print(len(network.scanner.nodes) )
+        assert (len(network.scanner.nodes) == 4)
+        for node_id in network.scanner.nodes:
+            print('node_id',node_id)
+            node_made_ = canopen.RemoteNode(node_id=node_id, object_dictionary='cobra4812_node{}.dcf'.format(node_id))
+            network.add_node(node_made_)
+
+            network[node_id].nmt.state = 'INITIALISING'
+            all_codes = [emcy.code for emcy in network[node_id].emcy.log]
+            active_codes = [emcy.code for emcy in network[node_id].emcy.active]
+            for code_ in all_codes:
+                print('emcy: {0}'.format(code_))
+            for code_ in active_codes:
+                print('emcy: {0}'.format(code_))
+            network[node_id].emcy.reset()
+
+        ## check bus state
+        print('\nstate: {0}'.format(network.bus.state))
+        print('bus channel_info: {0}'.format(network.bus.channel_info))
+
+        ## -----------------------------------------------------------------
+        ## send out time message
+        network.time.transmit()
+        time.sleep(0.1)
+
+        self.change_status(status='RESET')
+        self.change_status(status='RESET COMMUNICATION')
+        self.change_status(status='INITIALISING')
+
     def run(self):
         network = self.network
         try:
@@ -310,10 +346,11 @@ class TocabiMobile():
 
         cx, cy, cz = self.cmd.command 
         speed_mod = 100
+        angle_def = 0.2
 
         speed_x = cy * speed_mod
         speed_y = cx * speed_mod
-        speed_a = cz * speed_mod
+        speed_a = -cz * speed_mod * angle_def
 
         self.command[1] =  (speed_y + speed_x + speed_a)
         self.command[2] =  (speed_y - speed_x + speed_a)    
