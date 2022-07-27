@@ -27,6 +27,8 @@ import numpy as np
 class CommandBase:
     def __init__(self) -> None:
         self.command = [0,0,0]
+        self.speed = 100
+        self.kill_signal = False
 
 class TocabiMobile():
     def __init__(self, cmd : CommandBase) -> None:
@@ -286,6 +288,10 @@ class TocabiMobile():
                     network[3].rpdo['target velocity'].raw = -cmd_fr
                     network[4].rpdo['target velocity'].raw = -cmd_br
                 """
+                if self.cmd.kill_signal:
+                    print ('detect kill signal. shutting down ...')
+                    raise KeyboardInterrupt()
+
                 for node_id in network:
                     network[node_id].rpdo['mode_of_operation'].raw = 3
                     sword_bin = bin(network[node_id].tpdo['status word'].raw)
@@ -345,8 +351,8 @@ class TocabiMobile():
         """
 
         cx, cy, cz = self.cmd.command 
-        speed_mod = 100
-        angle_def = 0.2
+        speed_mod = self.cmd.speed # default = 100
+        angle_def = 0.5
 
         speed_x = cy * speed_mod
         speed_y = cx * speed_mod
