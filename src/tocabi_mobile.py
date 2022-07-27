@@ -21,7 +21,7 @@ TOCABI MOBILE ACTIVATOR (tocabi_mobile.py)
 import canopen
 import time
 
-from utils import CtrlWord, gen_controlword
+from .utils import CtrlWord, gen_controlword
 import numpy as np
 
 class CommandBase:
@@ -116,7 +116,7 @@ class TocabiMobile():
         assert (len(network.scanner.nodes) == 4)
         for node_id in network.scanner.nodes:
             print('node_id',node_id)
-            node_made_ = canopen.RemoteNode(node_id=node_id, object_dictionary='cobra4812_node{}.dcf'.format(node_id))
+            node_made_ = canopen.RemoteNode(node_id=node_id, object_dictionary='dcf/cobra4812_node{}.dcf'.format(node_id))
             network.add_node(node_made_)
             node_made_.tpdo.read()
             node_made_.rpdo.read()
@@ -252,7 +252,7 @@ class TocabiMobile():
         assert (len(network.scanner.nodes) == 4)
         for node_id in network.scanner.nodes:
             print('node_id',node_id)
-            node_made_ = canopen.RemoteNode(node_id=node_id, object_dictionary='cobra4812_node{}.dcf'.format(node_id))
+            node_made_ = canopen.RemoteNode(node_id=node_id, object_dictionary='dcf/cobra4812_node{}.dcf'.format(node_id))
             network.add_node(node_made_)
 
             network[node_id].nmt.state = 'INITIALISING'
@@ -362,8 +362,3 @@ class TocabiMobile():
         self.command[2] =  (speed_y - speed_x + speed_a)    
         self.command[3] = -(speed_y - speed_x - speed_a)     
         self.command[4] = -(speed_y + speed_x - speed_a)
-
-if __name__ == "__main__":
-    tm = TocabiMobile()
-    tm.connect()
-    tm.run()

@@ -1,4 +1,4 @@
-from tocabi_mobile import TocabiMobile, CommandBase
+from src.tocabi_mobile import TocabiMobile, CommandBase
 import threading
 from pyPS4Controller.controller import Controller
 
