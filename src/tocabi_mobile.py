@@ -12,10 +12,6 @@ TOCABI MOBILE ACTIVATOR (tocabi_mobile.py)
 @ Questions / Help
     CANOpen API -> psh117@snu.ac.kr
     cobra4812_node*.dcf -> june992@snu.ac.kr
-
-@ TODOs
-    TODO: ROS Comm or TCP/UDP Comm Implementation
-    TODO: Mechanum Control
 """
 
 import canopen
