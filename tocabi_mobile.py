@@ -24,8 +24,12 @@ import time
 from utils import CtrlWord, gen_controlword
 import numpy as np
 
-class TocabiMobile():
+class CommandBase:
     def __init__(self) -> None:
+        self.command = [0,0,0]
+
+class TocabiMobile():
+    def __init__(self, cmd : CommandBase) -> None:
         """
         0. Getting CANOpen device
         """
@@ -35,6 +39,8 @@ class TocabiMobile():
         self.print_rate = 100 #
         self.command_process_cnt = 0
         self.command_process_rate = 10
+        self.cmd = cmd
+        self.old_time = time.time()
         
         """
         REAL Command (should be integer)
@@ -258,19 +264,20 @@ class TocabiMobile():
                 self.periodic_print()
                 self.process_command()
 
-                remaining = max(0.005-(time.time() - old_time),0.0)
+                remaining = max(0.005-(time.time() - self.old_time),0.0)
                 time.sleep(remaining)
-                old_time = time.time()
+                self.old_time = time.time()
                 
         except KeyboardInterrupt:
             print('safely stopping')
             for node_id in network.scanner.nodes:
                 network[node_id].rpdo['motor_switch'].raw = 0
+                network[node_id].rpdo['target velocity'].raw = 0
                 network[node_id].rpdo[1].transmit()
             
             self.change_status(status='PRE-OPERATIONAL')
             self.change_status(status='INITIALISING')
-            self.change_status(status='STOPPED')
+            # self.change_status(status='STOPPED') # PLEASE DON'T IT WILL TERMINATE CAN COMM
             
 
     def periodic_print(self):
@@ -285,10 +292,14 @@ class TocabiMobile():
             """ 
             Put some codes for display 
             """
-            sword_bin = bin(network[3].tpdo['status word'].raw)
-            print( "n: {1} stat:{0:<32}\n".format(sword_bin, 1))
-            print('pav: {}'.format(network[1].tpdo['position actual value'].raw))
-            print('cav: {}'.format(network[1].tpdo['current actual value'].raw))
+            # sword_bin = bin(network[3].tpdo['status word'].raw)
+            # print( "n: {1} stat:{0:<32}\n".format(sword_bin, 1))
+            print('')
+            print('raw   cmd:', self.cmd.command)
+            print('motor cmd:', self.command[1:5])
+            print('')
+            # print('pav: {}'.format(network[1].tpdo['position actual value'].raw))
+            # print('cav: {}'.format(network[1].tpdo['current actual value'].raw))
 
     def process_command(self):
         """ 
@@ -296,17 +307,18 @@ class TocabiMobile():
         arbitrary values are assigned 
         THIS WILL BE REPLACED BY "REAL COMM" CODES or just keyboard for fun?
         """
-        lin_velocity = np.array([0.3, 0.2]) # m/s
-        angular_velocity = -0.1 # rad/s
 
-        self.command_process_cnt += 1
-        if self.command_process_cnt > self.command_process_rate:
-            self.command_process_cnt = 0
-            
-            # TODO: External comm here
-            pass
+        cx, cy, cz = self.cmd.command 
+        speed_mod = 100
 
-            # self.command[0] = lin_velocity[0] * 3.1415926535 
+        speed_x = cy * speed_mod
+        speed_y = cx * speed_mod
+        speed_a = cz * speed_mod
+
+        self.command[1] =  (speed_y + speed_x + speed_a)
+        self.command[2] =  (speed_y - speed_x + speed_a)    
+        self.command[3] = -(speed_y - speed_x - speed_a)     
+        self.command[4] = -(speed_y + speed_x - speed_a)
 
 if __name__ == "__main__":
     tm = TocabiMobile()
