@@ -12,13 +12,16 @@ TOCABI MOBILE ACTIVATOR (tocabi_mobile.py)
 @ Questions / Help
     CANOpen API -> psh117@snu.ac.kr
     cobra4812_node*.dcf -> june992@snu.ac.kr
+
+@ TODOs
+    TODO: ROS Comm or TCP/UDP Comm Implementation
+    TODO: Mechanum Control
 """
 
-from curses import reset_shell_mode
 import canopen
 import time
 
-from .utils import CtrlWord, gen_controlword
+from utils import CtrlWord, gen_controlword
 import numpy as np
 
 class CommandBase:
@@ -136,9 +139,9 @@ class TocabiMobile():
         network.time.transmit()
         time.sleep(0.1)
 
-        # trans_type_ = 1
-        trans_type_ = 255
-        event_timer = 10
+        strans_type_ = 1
+        trans_type_ = 1
+        event_timer = 0
 
         # PDO Mapping
         """
@@ -178,16 +181,18 @@ class TocabiMobile():
             ##change RPDO configuration
             id_ = 1
             network[node_id].rpdo[id_].clear()
-            network[node_id].rpdo[id_].add_variable('motor_switch')  ##16bit
+            # network[node_id].rpdo[id_].add_variable('motor_switch')  ##16bit
             network[node_id].rpdo[id_].add_variable('mode_of_operation') ##16bit
+            network[node_id].rpdo[id_].trans_type = trans_type_
             #network[node_id].rpdo[id_].add_variable('motor enable/disable') ##16bit
             network[node_id].rpdo[id_].enabled = True
 
             id_ = 2
             network[node_id].rpdo[id_].clear()
-            network[node_id].rpdo[id_].add_variable('start motion')
+            # network[node_id].rpdo[id_].add_variable('start motion')
             network[node_id].rpdo[id_].add_variable('target velocity')
             network[node_id].rpdo[id_].add_variable('target current value')
+            network[node_id].rpdo[id_].trans_type = trans_type_
             # network[node_id].rpdo[id_].add_variable('velocity demand value')
             network[node_id].rpdo[id_].enabled = True
 
@@ -195,6 +200,7 @@ class TocabiMobile():
             network[node_id].rpdo[id_].clear()
             network[node_id].rpdo[id_].add_variable('clear error')
             network[node_id].rpdo[id_].add_variable('control word')
+            network[node_id].rpdo[id_].trans_type = trans_type_
             network[node_id].rpdo[id_].enabled = True
             # id_ = 3
             # network[node_id].rpdo[id_].clear()
@@ -277,7 +283,9 @@ class TocabiMobile():
     def run(self):
         network = self.network
         try:
+
             while True:
+                self.network.sync.transmit()
                 """
                 Direction Reference:
                     network[1].rpdo['target velocity'].raw = cmd_fl
@@ -306,7 +314,6 @@ class TocabiMobile():
                 remaining = max(0.005-(time.time() - self.old_time),0.0)
                 time.sleep(remaining)
                 self.old_time = time.time()
-                self.network.sync.transmit()
                 
         except KeyboardInterrupt:
             print('safely stopping')
@@ -335,7 +342,7 @@ class TocabiMobile():
             # sword_bin = bin(network[3].tpdo['status word'].raw)
             # print( "n: {1} stat:{0:<32}\n".format(sword_bin, 1))
             print('')
-            print('raw   cmd:', self.cmd.command, self.cmd.speed)
+            print('raw   cmd:', self.cmd.command)
             print('motor cmd:', self.command[1:5])
             print('')
             # print('pav: {}'.format(network[1].tpdo['position actual value'].raw))
@@ -348,43 +355,20 @@ class TocabiMobile():
         THIS WILL BE REPLACED BY "REAL COMM" CODES or just keyboard for fun?
         """
 
-        cmd_x, cmd_y, cmd_theta = self.cmd.command 
+        cx, cy, cz = self.cmd.command 
+        speed_mod = self.cmd.speed # default = 100
+        angle_def = 0.5
 
-        # velocity mapping
-        vel_x_max = 3
-        vel_y_max = 3
-        vel_theta_max = 3
-        
-        vel_x = vel_x_max*(cmd_x/32768)
-        vel_y = vel_y_max*(-cmd_y/32768)
-        vel_theta = vel_theta_max*(cmd_theta/32768)
+        speed_x = cy * speed_mod
+        speed_y = cx * speed_mod
+        speed_a = -cz * speed_mod * angle_def
 
-        # kinematics
-        R_wheel = 0.091
-        Length_1 = 0.287
-        Length_2 = 0.255
+        self.command[1] =  (speed_y + speed_x + speed_a)
+        self.command[2] =  (speed_y - speed_x + speed_a)    
+        self.command[3] = -(speed_y - speed_x - speed_a)     
+        self.command[4] = -(speed_y + speed_x - speed_a)
 
-        # vel_x forward plus
-        # vel_y left plus
-        print('vel x: ', vel_x)
-        print('vel y: ', vel_y)
-        print('vel th: ', vel_theta)
-        w_1 = (vel_x - vel_y - (Length_1 + Length_2)*vel_theta)/R_wheel
-        w_2 = (vel_x + vel_y - (Length_1 + Length_2)*vel_theta)/R_wheel
-        w_3 = (vel_x + vel_y + (Length_1 + Length_2)*vel_theta)/R_wheel
-        w_4 = (vel_x - vel_y + (Length_1 + Length_2)*vel_theta)/R_wheel
-
-        # motor 3,4 axis direction mapping
-        self.command[1] =   w_1#front_left
-        self.command[2] =   w_2#back_left  
-        self.command[3] =  -w_3#front_right    
-        self.command[4] =  -w_4#back_right
-
-        #speed_x = cy * speed_mod
-        #speed_y = cx * speed_mod
-        #speed_a = -cz * speed_mod * angle_def
-
-        #self.command[1] =  (speed_y + speed_x + speed_a) #front_left
-        #self.command[2] =  (speed_y - speed_x + speed_a) #back_left  
-        #self.command[3] = -(speed_y - speed_x - speed_a) #front_right    
-        #self.command[4] = -(speed_y + speed_x - speed_a) #back_right
+if __name__ == "__main__":
+    tm = TocabiMobile()
+    tm.connect()
+    tm.run()

@@ -76,6 +76,12 @@ class PS4Listener(CommandBase, Controller):
         self.t = threading.Thread(target=self.listen)
         self.t.start()
 
+    def on_R2_press(self, value):
+        self.speed = 0.001 + (33000 + value)*0.0000001
+
+    def on_R2_release(self):
+        self.speed = 0.001
+
 if __name__ == "__main__":
     rl = PS4Listener(interface="/dev/input/js0", connecting_using_ds4drv=False)
     rl.start_threaded_listen()
