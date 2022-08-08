@@ -319,7 +319,6 @@ class TocabiMobile():
             self.change_status(status='INITIALISING')
             # self.change_status(status='STOPPED') # PLEASE DON'T IT WILL TERMINATE CAN COMM
             
-
     def periodic_print(self):
         """
         A. Periodical Print
@@ -349,15 +348,16 @@ class TocabiMobile():
         """
 
         cmd_x, cmd_y, cmd_theta = self.cmd.command 
+        booster = self.cmd.speed
 
         # velocity mapping
-        vel_x_max = 3
-        vel_y_max = 3
-        vel_theta_max = 3
+        vel_x_max = 0.5 * booster
+        vel_y_max = 0.5 * booster
+        vel_theta_max = 0.5 * booster
         
-        vel_x = vel_x_max*(cmd_x/32768)
-        vel_y = vel_y_max*(-cmd_y/32768)
-        vel_theta = vel_theta_max*(cmd_theta/32768)
+        vel_x = vel_x_max*(cmd_x)
+        vel_y = vel_y_max*(-cmd_y)
+        vel_theta = vel_theta_max*(cmd_theta)
 
         # kinematics
         R_wheel = 0.091
@@ -366,19 +366,21 @@ class TocabiMobile():
 
         # vel_x forward plus
         # vel_y left plus
-        print('vel x: ', vel_x)
-        print('vel y: ', vel_y)
-        print('vel th: ', vel_theta)
+        #print('vel x: ', vel_x)
+        #print('vel y: ', vel_y)
+        #print('vel th: ', vel_theta)
         w_1 = (vel_x - vel_y - (Length_1 + Length_2)*vel_theta)/R_wheel
         w_2 = (vel_x + vel_y - (Length_1 + Length_2)*vel_theta)/R_wheel
         w_3 = (vel_x + vel_y + (Length_1 + Length_2)*vel_theta)/R_wheel
         w_4 = (vel_x - vel_y + (Length_1 + Length_2)*vel_theta)/R_wheel
 
         # motor 3,4 axis direction mapping
-        self.command[1] =   w_1#front_left
-        self.command[2] =   w_2#back_left  
-        self.command[3] =  -w_3#front_right    
-        self.command[4] =  -w_4#back_right
+        # rad/s -> rpm
+        rad2rpm = 9.55
+        self.command[1] =  rad2rpm * w_1#front_left
+        self.command[2] =  rad2rpm * w_2#back_left  
+        self.command[3] =  -rad2rpm * w_3#front_right    
+        self.command[4] =  -rad2rpm * w_4#back_right
 
         #speed_x = cy * speed_mod
         #speed_y = cx * speed_mod

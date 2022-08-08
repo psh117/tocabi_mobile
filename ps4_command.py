@@ -9,7 +9,7 @@ class PS4Listener(CommandBase, Controller):
 
         self.up=False
         self.down=False
-        self.speed = 0.001
+        self.speed = 1
 
     def on_triangle_press(self):
         print('triangle!')
@@ -37,16 +37,16 @@ class PS4Listener(CommandBase, Controller):
         print("[PS4] controller disconnected")
 
     def on_L3_left(self, value):
-        self.command[1] = value
+        self.command[1] = value/32768
 
     def on_L3_right(self, value):
-        self.command[1] = value
+        self.command[1] = value/32768
 
     def on_L3_up(self, value):
-        self.command[0] = -value
+        self.command[0] = -value/32768
 
     def on_L3_down(self,value):
-        self.command[0] = -value
+        self.command[0] = -value/32768
 
     def on_L3_x_at_rest(self):
         self.command[1] = 0
@@ -55,10 +55,10 @@ class PS4Listener(CommandBase, Controller):
         self.command[0] = 0
 
     def on_R3_right(self, value):
-        self.command[2] = -value
+        self.command[2] = -value/32768
     
     def on_R3_left(self, value):
-        self.command[2] = -value
+        self.command[2] = -value/32768
 
     def on_R3_up(self, value):
         pass
@@ -77,10 +77,10 @@ class PS4Listener(CommandBase, Controller):
         self.t.start()
 
     def on_R2_press(self, value):
-        self.speed = 0.001 + (33000 + value)*0.0000001
+        self.speed = 1 + (33000 + value)*0.0001
 
     def on_R2_release(self):
-        self.speed = 0.001
+        self.speed = 1
 
 if __name__ == "__main__":
     rl = PS4Listener(interface="/dev/input/js0", connecting_using_ds4drv=False)
