@@ -2,6 +2,7 @@ import rospy
 from src.tocabi_mobile import TocabiMobile, CommandBase
 from geometry_msgs.msg import Twist
 from sensor_msgs.msg import Joy
+from std_msgs.msg import Int16
 
 def set_param():
     rospy.set_param('~dev', '/dev/input/js1')
@@ -15,6 +16,7 @@ class RospyListener(CommandBase):
         rospy.init_node('tm_listener', anonymous=True, disable_signals=True)
         # rospy.Subscriber("/cmd_vel", Twist, self.callback)
         rospy.Subscriber("joy", Joy, self.pedalcallback)
+        rospy.Subscriber("drive_mode", Int16, self.dmcallback)
         # self.MAF_size = 10
         # self.MAF_r = [0]*self.MAF_size
         # self.MAF_l = [0]*self.MAF_size
@@ -23,6 +25,12 @@ class RospyListener(CommandBase):
         self.pedal_r = 0
         self.pedal_l = 0
         self.pedal_y = 0
+        self.dm = 1
+        
+
+    def dmcallback(self, msg):
+        self.dm = msg.data
+        print(self.dm)
 
     # def callback(self,data):
     #     self.command[0] = data.linear.x
@@ -30,6 +38,7 @@ class RospyListener(CommandBase):
     #     self.command[2] = data.angular.z
     
     def pedalcallback(self, data):
+        # print(self.dm)
         # input : data.axes[0~2]
         # output : self.command[0~2] = 0
         # for backward. using mode. (external button required)
@@ -49,44 +58,56 @@ class RospyListener(CommandBase):
         # self.MAF_y.pop()
         # self.MAF_y.insert(0, self.pedal_y)
         # self.pedal_y = sum(self.MAF_y)/len(self.MAF_y)
+        self.speed = 1.0
 
-        if self.pedal_r > 0 and self.pedal_l > 0:
-            diff = self.pedal_r - self.pedal_l
-            if diff > self.threshold:
-                # Right Diagonal Foward
-                self.command[0] = min(self.pedal_r, self.pedal_l)
-                # self.command[1] = diff
-                self.command[1] = 0
-                # self.command[2] = self.pedal_y
-            elif diff < -self.threshold:
-                # Left Diagonal Foward
-                self.command[0] = min(self.pedal_r, self.pedal_l)
-                # self.command[1] = diff
-                self.command[1] = 0
-                # self.command[2] = self.pedal_y
-            else:
-                # Foward
-                self.command[0] = min(self.pedal_r, self.pedal_l)
-                self.command[1] = 0
-                # self.command[2] = self.pedal_y
-        elif self.pedal_r > 0:
-            # Right
-            self.command[0] = 0
-            self.command[1] = self.pedal_r
-            # self.command[2] = self.pedal_y
-        elif self.pedal_l > 0:
-            # LEFT
-            self.command[0] = 0
-            self.command[1] = -self.pedal_l
-            # self.command[2] = self.pedal_y
-        # elif abs(self.pedal_y) > 0.001:
-        #     self.command[0] = 0
-        #     self.command[1] = 0
-        #     # self.command[2] = self.pedal_y
-        else:
+        if self.dm == 0: # Parking
             self.command[0] = 0
             self.command[1] = 0
-            # self.command[2] = 0
+            self.command[2] = 0
+        else:
+            if self.pedal_r > 0 and self.pedal_l > 0:
+                diff = self.pedal_r - self.pedal_l
+                if diff > self.threshold:
+                    # Right Diagonal Foward
+                    self.command[0] = min(self.pedal_r, self.pedal_l)
+                    # self.command[1] = diff
+                    self.command[1] = 0
+                    # self.command[2] = self.pedal_y
+                elif diff < -self.threshold:
+                    # Left Diagonal Foward
+                    self.command[0] = min(self.pedal_r, self.pedal_l)
+                    # self.command[1] = diff
+                    self.command[1] = 0
+                    # self.command[2] = self.pedal_y
+                else:
+                    # Foward
+                    if self.dm == 1:
+                        self.command[0] = min(self.pedal_r, self.pedal_l)
+                        self.command[1] = 0
+                    elif self.dm == -1:
+                        self.command[0] = -min(self.pedal_r, self.pedal_l)
+                        self.command[1] = 0
+                    else:
+                        raise Exception("Drive mode is not in {-1,0,1}.")
+                    # self.command[2] = self.pedal_y
+            elif self.pedal_r > 0:
+                # Right
+                self.command[0] = 0
+                self.command[1] = self.pedal_r
+                # self.command[2] = self.pedal_y
+            elif self.pedal_l > 0:
+                # LEFT
+                self.command[0] = 0
+                self.command[1] = -self.pedal_l
+                # self.command[2] = self.pedal_y
+            # elif abs(self.pedal_y) > 0.001:
+            #     self.command[0] = 0
+            #     self.command[1] = 0
+            #     # self.command[2] = self.pedal_y
+            else:
+                self.command[0] = 0
+                self.command[1] = 0
+                # self.command[2] = 0
 
         if abs(self.pedal_y) > 0.001:
             self.command[2] = -self.pedal_y

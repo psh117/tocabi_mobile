@@ -24,8 +24,9 @@ import numpy as np
 class CommandBase:
     def __init__(self) -> None:
         self.command = [0,0,0]
-        self.speed = 100
+        self.speed = 1
         self.kill_signal = False
+        self.init_cnt = 0
 
 class TocabiMobile():
     def __init__(self, cmd : CommandBase) -> None:
@@ -48,6 +49,10 @@ class TocabiMobile():
         self.command[1] ~ self.command[4] 
         """
         self.command = [0,0,0,0,0]
+
+        """
+        """
+        self.cmd_LPF = [0,0,0]
 
         
 
@@ -337,7 +342,7 @@ class TocabiMobile():
             print('raw   cmd:', self.cmd.command, self.cmd.speed)
             print('motor cmd:', self.command[1:5])
             print('')
-            # print('pav: {}'.format(network[1].tpdo['position actual value'].raw))
+            #print('pav: {}'.format(network[1].tpdo['position actual value'].raw))
             # print('cav: {}'.format(network[1].tpdo['current actual value'].raw))
 
     def process_command(self):
@@ -346,18 +351,52 @@ class TocabiMobile():
         arbitrary values are assigned 
         THIS WILL BE REPLACED BY "REAL COMM" CODES or just keyboard for fun?
         """
-
+        
         cmd_x, cmd_y, cmd_theta = self.cmd.command 
         booster = self.cmd.speed
+        
+        #velocity trash cmd handle
+        if cmd_x > 1.0 or cmd_x < -1.0:
+            print('commmand x error')
+            cmd_x = 0.0
+            cmd_y = 0.0
+            cmd_theta = 0.0
+        
+        if cmd_y > 1.0 or cmd_y < -1.0:
+            print('commmand y error')
+            cmd_x = 0.0
+            cmd_y = 0.0
+            cmd_theta = 0.0
+        
+        if cmd_theta > 1.0 or cmd_theta < -1.0:
+            print('commmand theta error')
+            cmd_x = 0.0
+            cmd_y = 0.0
+            cmd_theta = 0.0
 
+        # command filter
+        pi = 3.141592
+        del_t = 0.005
+        cutoff_freq = 2
+        self.cmd_LPF[0] = 1/(1 + 2*pi*cutoff_freq*del_t)*self.cmd_LPF[0] + (2*pi*cutoff_freq*del_t)/(1 + 2*pi*cutoff_freq*del_t)*cmd_x
+        self.cmd_LPF[1] = 1/(1 + 2*pi*cutoff_freq*del_t)*self.cmd_LPF[1] + (2*pi*cutoff_freq*del_t)/(1 + 2*pi*cutoff_freq*del_t)*cmd_y
+        self.cmd_LPF[2] = 1/(1 + 2*pi*cutoff_freq*del_t)*self.cmd_LPF[2] + (2*pi*cutoff_freq*del_t)/(1 + 2*pi*cutoff_freq*del_t)*cmd_theta
+        print(cmd_x , self.cmd_LPF[0])
+        print(cmd_y , self.cmd_LPF[1])
+        print(cmd_theta , self.cmd_LPF[2])
         # velocity mapping
         vel_x_max = 0.5 * booster
         vel_y_max = 0.5 * booster
         vel_theta_max = 0.5 * booster
-        
-        vel_x = vel_x_max*(cmd_x)
-        vel_y = vel_y_max*(-cmd_y)
-        vel_theta = vel_theta_max*(cmd_theta)
+
+        #velocity calc
+        vel_x = vel_x_max*(self.cmd_LPF[0])
+        vel_y = vel_y_max*(-self.cmd_LPF[1])
+        vel_theta = vel_theta_max*(self.cmd_LPF[2])
+
+        #vel_x = vel_x_max*(cmd_x)
+        #vel_y = vel_y_max*(-cmd_y)
+        #vel_theta = vel_theta_max*(cmd_theta)
 
         # kinematics
         R_wheel = 0.091
@@ -366,9 +405,6 @@ class TocabiMobile():
 
         # vel_x forward plus
         # vel_y left plus
-        #print('vel x: ', vel_x)
-        #print('vel y: ', vel_y)
-        #print('vel th: ', vel_theta)
         w_1 = (vel_x - vel_y - (Length_1 + Length_2)*vel_theta)/R_wheel
         w_2 = (vel_x + vel_y - (Length_1 + Length_2)*vel_theta)/R_wheel
         w_3 = (vel_x + vel_y + (Length_1 + Length_2)*vel_theta)/R_wheel
