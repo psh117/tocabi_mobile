@@ -30,7 +30,7 @@ class RospyListener(CommandBase):
 
     def dmcallback(self, msg):
         self.dm = msg.data
-        print(self.dm)
+        # print(self.dm)
 
     # def callback(self,data):
     #     self.command[0] = data.linear.x
@@ -108,11 +108,11 @@ class RospyListener(CommandBase):
                 self.command[0] = 0
                 self.command[1] = 0
                 # self.command[2] = 0
-
-        if abs(self.pedal_y) > 0.001:
-            self.command[2] = -self.pedal_y
-        else:
-            self.command[2] = 0
+            
+            if abs(self.pedal_y) > 0.001:
+                self.command[2] = -self.pedal_y
+            else:
+                self.command[2] = 0
 
         # print("pedal_l : ")
         # print(rl.pedal_l)

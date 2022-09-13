@@ -41,8 +41,6 @@ class TocabiMobile():
         self.command_process_rate = 10
         self.cmd = cmd
         self.old_time = time.time()
-
-        self.file = []
         
         """
         REAL Command (should be integer)
@@ -237,7 +235,6 @@ class TocabiMobile():
             network[node_id].rpdo[1].transmit()
             time.sleep(0.1)
 
-        self.file = open("TextFile.txt", "w")
 
         self.change_status(status='STOPPED')
         self.change_status(status='RESET')
@@ -354,21 +351,7 @@ class TocabiMobile():
         arbitrary values are assigned 
         THIS WILL BE REPLACED BY "REAL COMM" CODES or just keyboard for fun?
         """
-        network = self.network
         
-        vel1 = " stat:{:.2f}".format(network[1].tpdo['velocity actual value'].raw)
-        vel_rad = float(network[1].tpdo['velocity actual value'].raw) / 9.55
-        vel2 = " stat:{:.2f}".format(network[2].tpdo['velocity actual value'].raw)
-        vel_rad2 = float(network[2].tpdo['velocity actual value'].raw) / 9.55
-        vel3 = " stat:{:.2f}".format(network[3].tpdo['velocity actual value'].raw)
-        vel_rad3 = float(network[3].tpdo['velocity actual value'].raw) / 9.55
-        vel4 = " stat:{:.2f}".format(network[4].tpdo['velocity actual value'].raw)
-        vel_rad4 = float(network[4].tpdo['velocity actual value'].raw) / 9.55
-
-        print(vel_rad,  vel_rad2, vel_rad3, vel_rad4)
-
-
-
         cmd_x, cmd_y, cmd_theta = self.cmd.command 
         booster = self.cmd.speed
         
@@ -421,10 +404,9 @@ class TocabiMobile():
         #    vel_x = 0
         #else:
         #    vel_x = ((vel_x_max - vel_x_min)/(1 - cmd_x_dead))*(self.cmd_LPF[0] - cmd_x_dead) + vel_x_min
-        #vel_x = 0
-        vel_x = vel_x_max*(self.cmd_LPF[0])
-        vel_y = vel_y_max*(-self.cmd_LPF[1])
-        #vel_y = - 0.05
+        # vel_x = 0
+	vel_x = vel_x_max*(self.cmd_LPF[0])#vel_y = vel_y_max*(-self.cmd_LPF[1])
+	vel_y = - 0.05
         vel_theta = vel_theta_max*(self.cmd_LPF[2])
         
         #print("cmd x", self.cmd_LPF[0])
@@ -445,12 +427,6 @@ class TocabiMobile():
         w_2 = (vel_x + vel_y - (Length_1 + Length_2)*vel_theta)/R_wheel
         w_3 = (vel_x + vel_y + (Length_1 + Length_2)*vel_theta)/R_wheel
         w_4 = (vel_x - vel_y + (Length_1 + Length_2)*vel_theta)/R_wheel
-
-        lines = str(vel_rad) +' '+ str(vel_rad2) +' '+ str(vel_rad3)+' '+str(vel_rad4)+' '+ str(w_1)+' '+ str(w_2)+' '+ str(w_3)+' '+ str(w_4)
-        self.file.write(lines)
-        self.file.write('\n')
-
-
 
         # motor 3,4 axis direction mapping
         # rad/s -> rpm
