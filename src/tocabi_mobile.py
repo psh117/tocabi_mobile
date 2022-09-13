@@ -446,7 +446,15 @@ class TocabiMobile():
         w_3 = (vel_x + vel_y + (Length_1 + Length_2)*vel_theta)/R_wheel
         w_4 = (vel_x - vel_y + (Length_1 + Length_2)*vel_theta)/R_wheel
 
-        lines = str(vel_rad) +' '+ str(vel_rad2) +' '+ str(vel_rad3)+' '+str(vel_rad4)+' '+ str(w_1)+' '+ str(w_2)+' '+ str(w_3)+' '+ str(w_4)
+        l1_l2 = 1.0/(Length_1 + Length_2)
+        vel_x_real = R_wheel/4.0*(vel_rad + vel_rad2 + vel_rad3 + vel_rad4)
+        vel_y_real = R_wheel/4.0*(vel_rad - vel_rad2 - vel_rad3 + vel_rad4)
+        vel_th_real = R_wheel/4.0*l1_l2*(-vel_rad + vel_rad2 - vel_rad3 + vel_rad4)
+
+        #lines = str(vel_rad) +' '+ str(vel_rad2) +' '+ str(vel_rad3)+' '+str(vel_rad4)+' '+ str(w_1)+' '+ str(w_2)+' '+ str(w_3)+' '+ str(w_4)
+        lines = str(vel_x) +' '+ str(vel_y) +' '+ str(vel_theta)+' '+str(vel_x_real)+' '+ str(vel_y_real)+' '+ str(vel_th_real)
+
+
         self.file.write(lines)
         self.file.write('\n')
 
