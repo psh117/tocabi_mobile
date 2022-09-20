@@ -13,7 +13,7 @@ def set_param():
 class RospyListener(CommandBase):
     def __init__(self):
         super().__init__()
-        rospy.init_node('tm_listener', anonymous=True, disable_signals=True)
+        rospy.init_node('tm_listener', disable_signals=True)
         # rospy.Subscriber("/cmd_vel", Twist, self.callback)
         rospy.Subscriber("joy", Joy, self.pedalcallback)
         rospy.Subscriber("drive_mode", Int16, self.dmcallback)

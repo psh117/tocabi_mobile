@@ -20,6 +20,7 @@ import time
 
 from .utils import CtrlWord, gen_controlword
 import numpy as np
+import sys
 
 class CommandBase:
     def __init__(self) -> None:
@@ -71,6 +72,7 @@ class TocabiMobile():
         for node_id in network:
             print('node {0} state: {1}'.format(node_id, network[node_id].nmt.state))
         print()
+        sys.stdout.flush()
 
     def get_status_word(self):
         network = self.network
@@ -120,7 +122,7 @@ class TocabiMobile():
         assert (len(network.scanner.nodes) == 4)
         for node_id in network.scanner.nodes:
             print('node_id',node_id)
-            node_made_ = canopen.RemoteNode(node_id=node_id, object_dictionary='dcf/cobra4812_node{}.dcf'.format(node_id))
+            node_made_ = canopen.RemoteNode(node_id=node_id, object_dictionary='/home/dyros/sh_ws/tocabi_mobile/dcf/cobra4812_node{}.dcf'.format(node_id))
             network.add_node(node_made_)
             node_made_.tpdo.read()
             node_made_.rpdo.read()
@@ -245,6 +247,7 @@ class TocabiMobile():
         self.change_status(status='INITIALISING')
         self.change_status(status='PRE-OPERATIONAL')
         self.change_status(status='OPERATIONAL')
+        sys.stdout.flush()
 
     def recovery(self):
         """
@@ -281,6 +284,7 @@ class TocabiMobile():
         self.change_status(status='RESET')
         self.change_status(status='RESET COMMUNICATION')
         self.change_status(status='INITIALISING')
+        sys.stdout.flush()
 
     def run(self):
         network = self.network
@@ -341,10 +345,11 @@ class TocabiMobile():
             """
             # sword_bin = bin(network[3].tpdo['status word'].raw)
             # print( "n: {1} stat:{0:<32}\n".format(sword_bin, 1))
-            print('')
-            print('raw   cmd:', self.cmd.command, self.cmd.speed)
-            print('motor cmd:', self.command[1:5])
-            print('')
+            # print('')
+            # print('raw   cmd:', self.cmd.command, self.cmd.speed)
+            # print('motor cmd:', self.command[1:5])
+            # print('')
+            # sys.stdout.flush()
             #print('pav: {}'.format(network[1].tpdo['position actual value'].raw))
             # print('cav: {}'.format(network[1].tpdo['current actual value'].raw))
 
@@ -354,20 +359,13 @@ class TocabiMobile():
         arbitrary values are assigned 
         THIS WILL BE REPLACED BY "REAL COMM" CODES or just keyboard for fun?
         """
-        network = self.network
+        #network = self.network
         
-        vel1 = " stat:{:.2f}".format(network[1].tpdo['velocity actual value'].raw)
-        vel_rad = float(network[1].tpdo['velocity actual value'].raw) / 9.55
-        vel2 = " stat:{:.2f}".format(network[2].tpdo['velocity actual value'].raw)
-        vel_rad2 = float(network[2].tpdo['velocity actual value'].raw) / 9.55
-        vel3 = " stat:{:.2f}".format(network[3].tpdo['velocity actual value'].raw)
-        vel_rad3 = float(network[3].tpdo['velocity actual value'].raw) / 9.55
-        vel4 = " stat:{:.2f}".format(network[4].tpdo['velocity actual value'].raw)
-        vel_rad4 = float(network[4].tpdo['velocity actual value'].raw) / 9.55
-
-        print(vel_rad,  vel_rad2, vel_rad3, vel_rad4)
-
-
+        #vel_rad = float(network[1].tpdo['velocity actual value'].raw) / 9.55
+        #vel_rad2 = float(network[2].tpdo['velocity actual value'].raw) / 9.55
+        #vel_rad3 = float(network[3].tpdo['velocity actual value'].raw) / 9.55
+        #vel_rad4 = float(network[4].tpdo['velocity actual value'].raw) / 9.55
+        #print(vel_rad,  vel_rad2, vel_rad3, vel_rad4)
 
         cmd_x, cmd_y, cmd_theta = self.cmd.command 
         booster = self.cmd.speed
@@ -446,17 +444,17 @@ class TocabiMobile():
         w_3 = (vel_x + vel_y + (Length_1 + Length_2)*vel_theta)/R_wheel
         w_4 = (vel_x - vel_y + (Length_1 + Length_2)*vel_theta)/R_wheel
 
-        l1_l2 = 1.0/(Length_1 + Length_2)
-        vel_x_real = R_wheel/4.0*(vel_rad + vel_rad2 + vel_rad3 + vel_rad4)
-        vel_y_real = R_wheel/4.0*(vel_rad - vel_rad2 - vel_rad3 + vel_rad4)
-        vel_th_real = R_wheel/4.0*l1_l2*(-vel_rad + vel_rad2 - vel_rad3 + vel_rad4)
+        #l1_l2 = 1.0/(Length_1 + Length_2)
+        #vel_x_real = R_wheel/4.0*(vel_rad + vel_rad2 + vel_rad3 + vel_rad4)
+        #vel_y_real = R_wheel/4.0*(vel_rad - vel_rad2 - vel_rad3 + vel_rad4)
+        #vel_th_real = R_wheel/4.0*l1_l2*(-vel_rad + vel_rad2 - vel_rad3 + vel_rad4)
 
         #lines = str(vel_rad) +' '+ str(vel_rad2) +' '+ str(vel_rad3)+' '+str(vel_rad4)+' '+ str(w_1)+' '+ str(w_2)+' '+ str(w_3)+' '+ str(w_4)
-        lines = str(vel_x) +' '+ str(vel_y) +' '+ str(vel_theta)+' '+str(vel_x_real)+' '+ str(vel_y_real)+' '+ str(vel_th_real)
+        #lines = str(vel_x) +' '+ str(vel_y) +' '+ str(vel_theta)+' '+str(vel_x_real)+' '+ str(vel_y_real)+' '+ str(vel_th_real)
 
 
-        self.file.write(lines)
-        self.file.write('\n')
+        #self.file.write(lines)
+        #self.file.write('\n')
 
 
 
