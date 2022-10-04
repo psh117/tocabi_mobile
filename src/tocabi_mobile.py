@@ -43,6 +43,10 @@ class TocabiMobile():
         self.cmd = cmd
         self.old_time = time.time()
 
+        self.start_time = time.time()
+        self.last_fault_time = [time.time(),time.time(),time.time(),time.time(),time.time()]
+        self.fault_stop_delay = 5
+
         self.file = []
         
         """
@@ -56,6 +60,16 @@ class TocabiMobile():
         """
         """
         self.cmd_LPF = [0,0,0]
+        self.theta_LPF = 0.0
+        self.theta_LPF_prev = 0.0
+        self.theta_dot = 0.0
+        self.vel_x_LPF = 0.0
+        self.vel_x_LPF_prev = 0.0
+        self.vel_x_dot = 0.0      
+        self.vel_y_LPF = 0.0
+        self.vel_y_LPF_prev = 0.0
+        self.vel_y_dot = 0.0                
+        self.intergral_ = 0.0
 
         
 
@@ -119,7 +133,17 @@ class TocabiMobile():
         network.scanner.search()
         time.sleep(0.5)
         print(len(network.scanner.nodes) )
+
+        if len(network.scanner.nodes) == 3:
+            time.sleep(1)
+            print('searching again ...')
+            network.scanner.search()
+
+
+        
         assert (len(network.scanner.nodes) == 4)
+
+
         for node_id in network.scanner.nodes:
             print('node_id',node_id)
             node_made_ = canopen.RemoteNode(node_id=node_id, object_dictionary='/home/dyros/sh_ws/tocabi_mobile/dcf/cobra4812_node{}.dcf'.format(node_id))
@@ -307,11 +331,28 @@ class TocabiMobile():
                     
                     network[node_id].rpdo['target velocity'].raw =  self.command[node_id]
                     ctrl_wrd = gen_controlword(sword_bin)
+
+                    if ctrl_wrd == CtrlWord.FAULT_RESET:
+                        if time.time() > self.start_time + 5.0:
+                            if  time.time() > self.last_fault_time[node_id] + self.fault_stop_delay:
+                                print(f'ID {node_id} -- fault detected ! reboot retry in {self.fault_stop_delay} sec')
+                                network[node_id].rpdo['motor_switch'].raw = 0
+                                network[node_id].rpdo['target velocity'].raw = 0
+                        self.last_fault_time[node_id] = time.time()
+
+                    if time.time() <= self.last_fault_time[node_id] + self.fault_stop_delay:
+                        network[node_id].rpdo['motor_switch'].raw = 0
+                        network[node_id].rpdo['target velocity'].raw = 0
+                    else:
+                        network[node_id].rpdo['motor_switch'].raw = 1
+                        network[node_id].rpdo['mode_of_operation'].raw = 3
+                        network[node_id].rpdo['start motion'].raw = 1
+                            
                     network[node_id].rpdo['control word'].raw = ctrl_wrd
                     network[node_id].rpdo[1].transmit()
                     network[node_id].rpdo[2].transmit()
                     network[node_id].rpdo[3].transmit()
-                    
+                        
                 self.periodic_print()
                 self.process_command()
 
@@ -319,6 +360,7 @@ class TocabiMobile():
                 time.sleep(remaining)
                 self.old_time = time.time()
                 self.network.sync.transmit()
+                
                 
         except KeyboardInterrupt:
             print('safely stopping')
@@ -359,13 +401,16 @@ class TocabiMobile():
         arbitrary values are assigned 
         THIS WILL BE REPLACED BY "REAL COMM" CODES or just keyboard for fun?
         """
-        #network = self.network
+        network = self.network
         
-        #vel_rad = float(network[1].tpdo['velocity actual value'].raw) / 9.55
-        #vel_rad2 = float(network[2].tpdo['velocity actual value'].raw) / 9.55
-        #vel_rad3 = float(network[3].tpdo['velocity actual value'].raw) / 9.55
-        #vel_rad4 = float(network[4].tpdo['velocity actual value'].raw) / 9.55
+        vel_rad = float(network[1].tpdo['velocity actual value'].raw) / 9.55
+        vel_rad2 = float(network[2].tpdo['velocity actual value'].raw) / 9.55
+        vel_rad3 = -float(network[3].tpdo['velocity actual value'].raw) / 9.55
+        vel_rad4 = -float(network[4].tpdo['velocity actual value'].raw) / 9.55
         #print(vel_rad,  vel_rad2, vel_rad3, vel_rad4)
+
+        # v_x, v_y, w;
+
 
         cmd_x, cmd_y, cmd_theta = self.cmd.command 
         booster = self.cmd.speed
@@ -393,6 +438,7 @@ class TocabiMobile():
         pi = 3.141592
         del_t = 0.005
         cutoff_freq = 2
+        cutoff_freq2 = 20
         self.cmd_LPF[0] = 1/(1 + 2*pi*cutoff_freq*del_t)*self.cmd_LPF[0] + (2*pi*cutoff_freq*del_t)/(1 + 2*pi*cutoff_freq*del_t)*cmd_x
         self.cmd_LPF[1] = 1/(1 + 2*pi*cutoff_freq*del_t)*self.cmd_LPF[1] + (2*pi*cutoff_freq*del_t)/(1 + 2*pi*cutoff_freq*del_t)*cmd_y
         self.cmd_LPF[2] = 1/(1 + 2*pi*cutoff_freq*del_t)*self.cmd_LPF[2] + (2*pi*cutoff_freq*del_t)/(1 + 2*pi*cutoff_freq*del_t)*cmd_theta
@@ -413,6 +459,27 @@ class TocabiMobile():
         cmd_y_dead = 0.2
         cmd_theta_dead = 0.2
 
+        R_wheel = 0.091
+        Length_1 = 0.287
+        Length_2 = 0.255
+        l1_l2 = 1.0/(Length_1 + Length_2)
+        vel_x_real = R_wheel/4.0*(vel_rad + vel_rad2 + vel_rad3 + vel_rad4)
+        vel_y_real = R_wheel/4.0*(-vel_rad + vel_rad2 + vel_rad3 - vel_rad4)
+        vel_th_real = R_wheel/4.0*l1_l2*(-vel_rad - vel_rad2 + vel_rad3 + vel_rad4)
+
+        self.vel_x_LPF = 1/(1 + 2*pi*cutoff_freq2*del_t)*self.vel_x_LPF + (2*pi*cutoff_freq2*del_t)/(1 + 2*pi*cutoff_freq2*del_t)*vel_x_real
+        self.vel_x_dot = (self.vel_x_LPF - self.vel_x_LPF_prev)/del_t
+        self.vel_x_LPF_prev = self.vel_x_LPF
+
+        self.vel_y_LPF = 1/(1 + 2*pi*cutoff_freq2*del_t)*self.vel_y_LPF + (2*pi*cutoff_freq2*del_t)/(1 + 2*pi*cutoff_freq2*del_t)*vel_y_real
+        self.vel_y_dot = (self.vel_y_LPF - self.vel_y_LPF_prev)/del_t
+        self.vel_y_LPF_prev = self.vel_y_LPF        
+
+
+        self.theta_LPF = 1/(1 + 2*pi*cutoff_freq2*del_t)*self.theta_LPF + (2*pi*cutoff_freq2*del_t)/(1 + 2*pi*cutoff_freq2*del_t)*vel_th_real
+        self.theta_dot = (self.theta_LPF - self.theta_LPF_prev)/del_t
+        self.theta_LPF_prev = self.theta_LPF
+
         #velocity calc
         #vel_x = vel_x_max*(self.cmd_LPF[0])
         #if(self.cmd_LPF[0] < cmd_x_dead and self.cmd_LPF[0] > -cmd_x_dead ):
@@ -422,20 +489,33 @@ class TocabiMobile():
         #vel_x = 0
         vel_x = vel_x_max*(self.cmd_LPF[0])
         vel_y = vel_y_max*(-self.cmd_LPF[1])
+
+
         #vel_y = - 0.05
-        vel_theta = vel_theta_max*(self.cmd_LPF[2])
+
+        ###############################################
+        #kp = 0.5
+        #ki = 0.04
+        #desired_theta = 0.0
+        #desired_x = 0.1        
+        #error = desired_theta - self.theta_LPF
+        #self.intergral_ += error
         
+        ############## Keunwoo's best gain tuning ##############
+        #vel_theta = desired_theta - 0.05*self.theta_dot#+ ki * self.intergral_# + kp*error + ki * self.intergral_  #vel_theta_max*(self.cmd_LPF[2])
+        #vel_x = desired_x - 0.3*self.vel_x_dot
+        #vel_y = desired_y - 0.3*self.vel_y_dot
+        ###############################################
+
         #print("cmd x", self.cmd_LPF[0])
         #print("vel x", vel_x)
 
-        #vel_x = vel_x_max*(cmd_x)
-        #vel_y = vel_y_max*(-cmd_y)
-        #vel_theta = vel_theta_max*(cmd_theta)
+        vel_x = vel_x_max*(cmd_x)
+        vel_y = vel_y_max*(-cmd_y)
+        vel_theta = vel_theta_max*(cmd_theta)
 
         # kinematics
-        R_wheel = 0.091
-        Length_1 = 0.287
-        Length_2 = 0.255
+
 
         # vel_x forward plus
         # vel_y left plus
@@ -444,17 +524,13 @@ class TocabiMobile():
         w_3 = (vel_x + vel_y + (Length_1 + Length_2)*vel_theta)/R_wheel
         w_4 = (vel_x - vel_y + (Length_1 + Length_2)*vel_theta)/R_wheel
 
-        #l1_l2 = 1.0/(Length_1 + Length_2)
-        #vel_x_real = R_wheel/4.0*(vel_rad + vel_rad2 + vel_rad3 + vel_rad4)
-        #vel_y_real = R_wheel/4.0*(vel_rad - vel_rad2 - vel_rad3 + vel_rad4)
-        #vel_th_real = R_wheel/4.0*l1_l2*(-vel_rad + vel_rad2 - vel_rad3 + vel_rad4)
-
         #lines = str(vel_rad) +' '+ str(vel_rad2) +' '+ str(vel_rad3)+' '+str(vel_rad4)+' '+ str(w_1)+' '+ str(w_2)+' '+ str(w_3)+' '+ str(w_4)
-        #lines = str(vel_x) +' '+ str(vel_y) +' '+ str(vel_theta)+' '+str(vel_x_real)+' '+ str(vel_y_real)+' '+ str(vel_th_real)
+        # lines = str(vel_x) +' '+ str(vel_y) +' '+ str(vel_theta)+' '+str(vel_x_real)+' '+ str(vel_y_real)+' '+ str(vel_th_real) + ' '+ str(self.vel_x_dot) + ' '+ str(self.vel_y_dot) + ' '+ str(self.theta_dot) 
 
+        
 
-        #self.file.write(lines)
-        #self.file.write('\n')
+        # self.file.write(lines)
+        # self.file.write('\n')
 
 
 
