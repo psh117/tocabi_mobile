@@ -17,7 +17,9 @@ class RospyListener(CommandBase):
         rospy.init_node('tm_listener', disable_signals=True)
         # rospy.Subscriber("/cmd_vel", Twist, self.callback)
         rospy.Subscriber("joy", Joy, self.pedalcallback)
+        rospy.Subscriber("joy_gui", Joy, self.guijoycallback)
         rospy.Subscriber("drive_mode", Int16, self.dmcallback)
+        self.mode_pub = rospy.Publisher("mobile_mode", Int16, queue_size=10)
         # self.MAF_size = 10
         # self.MAF_r = [0]*self.MAF_size
         # self.MAF_l = [0]*self.MAF_size
@@ -40,14 +42,21 @@ class RospyListener(CommandBase):
             self.command[1] = 0
             self.command[2] = 0
 
+            
+            self.mode_pub.publish(data=3)
+
         elif msg.data == 2:
             self.gui_control = False
+
+            self.dm = 0
 
             print('mode : guicontrol deactivate')
 
             self.command[0] = 0
             self.command[1] = 0
             self.command[2] = 0
+
+            self.mode_pub.publish(data=2)
         else:
             if self.dm != msg.data:
                 
@@ -55,14 +64,19 @@ class RospyListener(CommandBase):
 
                 if self.dm == 1:
                     print('mode : drive')
+                    self.mode_pub.publish(data=1)
                 elif self.dm == 0:
                     print('mode : neutral')
+                    self.mode_pub.publish(data=0)
                 elif self.dm == -1:
                     print('mode : reverse')
+                    self.mode_pub.publish(data=-1)
 
                 self.command[0] = 0
                 self.command[1] = 0
                 self.command[2] = 0
+
+        self.mode_pub.publish(data=msg.data)
 
 
         sys.stdout.flush()
@@ -77,6 +91,17 @@ class RospyListener(CommandBase):
     #     self.command[0] = data.linear.x
     #     self.command[1] = data.linear.y
     #     self.command[2] = data.angular.z
+
+    def emcallback(self, data):
+        self.emlock = True
+
+    def guijoycallback(self, data):
+        scale = 3
+        if self.gui_control:
+            self.command[0] = data.axes[0]/scale
+            self.command[1] = data.axes[1]/scale
+            self.command[2] = data.axes[2]/scale
+
     
     def pedalcallback(self, data):
         # print(self.dm)
@@ -85,9 +110,6 @@ class RospyListener(CommandBase):
         # for backward. using mode. (external button required)
         # mode = 0~1 (0:foward, 1:backward)
         scale = 3
-        self.pedal_r = (data.axes[0]+1)/2/scale
-        self.pedal_l = (data.axes[1]+1)/2/scale
-        self.pedal_y = data.axes[2]/scale
 
         # # Buffer Moving Average Filter(MAF)
         # self.MAF_r.pop()
@@ -101,15 +123,18 @@ class RospyListener(CommandBase):
         # self.pedal_y = sum(self.MAF_y)/len(self.MAF_y)
         self.speed = 1.0
 
-        if self.gui_control:
-            self.command[0] = data.axes[0]/scale
-            self.command[1] = data.axes[1]/scale
-            self.command[2] = data.axes[2]/scale
-        else:
+        if not self.gui_control:
+            self.pedal_r = (data.axes[0]+1)/2/scale
+            self.pedal_l = (data.axes[1]+1)/2/scale
+            self.pedal_y = data.axes[2]/scale
+
+
+
             if self.dm == 0: # Parking
                 self.command[0] = 0
                 self.command[1] = 0
                 self.command[2] = 0
+            
             else:
                 if self.pedal_r > 0 and self.pedal_l > 0:
                     diff = self.pedal_r - self.pedal_l

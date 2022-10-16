@@ -6,6 +6,9 @@ class PS4Listener(CommandBase, Controller):
     def __init__(self, **kwargs):
         Controller.__init__(self, **kwargs)
         CommandBase.__init__(self)
+        self.command[0] = 0.0
+        self.command[1] = 0.0
+        self.command[2] = 0.0
 
         self.up=False
         self.down=False
