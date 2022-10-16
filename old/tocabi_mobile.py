@@ -12,22 +12,23 @@ TOCABI MOBILE ACTIVATOR (tocabi_mobile.py)
 @ Questions / Help
     CANOpen API -> psh117@snu.ac.kr
     cobra4812_node*.dcf -> june992@snu.ac.kr
+
+@ TODOs
+    TODO: ROS Comm or TCP/UDP Comm Implementation
+    TODO: Mechanum Control
 """
 
-from curses import reset_shell_mode
 import canopen
 import time
 
-from .utils import CtrlWord, gen_controlword
+from utils import CtrlWord, gen_controlword
 import numpy as np
-import sys
 
 class CommandBase:
     def __init__(self) -> None:
         self.command = [0,0,0]
-        self.speed = 1
+        self.speed = 100
         self.kill_signal = False
-        self.init_cnt = 0
 
 class TocabiMobile():
     def __init__(self, cmd : CommandBase) -> None:
@@ -42,12 +43,6 @@ class TocabiMobile():
         self.command_process_rate = 10
         self.cmd = cmd
         self.old_time = time.time()
-
-        self.start_time = time.time()
-        self.last_fault_time = [time.time(),time.time(),time.time(),time.time(),time.time()]
-        self.fault_stop_delay = 5
-
-        self.file = []
         
         """
         REAL Command (should be integer)
@@ -56,20 +51,6 @@ class TocabiMobile():
         self.command[1] ~ self.command[4] 
         """
         self.command = [0,0,0,0,0]
-
-        """
-        """
-        self.cmd_LPF = [0,0,0]
-        self.theta_LPF = 0.0
-        self.theta_LPF_prev = 0.0
-        self.theta_dot = 0.0
-        self.vel_x_LPF = 0.0
-        self.vel_x_LPF_prev = 0.0
-        self.vel_x_dot = 0.0      
-        self.vel_y_LPF = 0.0
-        self.vel_y_LPF_prev = 0.0
-        self.vel_y_dot = 0.0                
-        self.intergral_ = 0.0
 
         
 
@@ -86,7 +67,6 @@ class TocabiMobile():
         for node_id in network:
             print('node {0} state: {1}'.format(node_id, network[node_id].nmt.state))
         print()
-        sys.stdout.flush()
 
     def get_status_word(self):
         network = self.network
@@ -133,17 +113,7 @@ class TocabiMobile():
         network.scanner.search()
         time.sleep(0.5)
         print(len(network.scanner.nodes) )
-
-        if len(network.scanner.nodes) == 3:
-            time.sleep(1)
-            print('searching again ...')
-            network.scanner.search()
-
-
-        
         assert (len(network.scanner.nodes) == 4)
-
-
         for node_id in network.scanner.nodes:
             print('node_id',node_id)
             node_made_ = canopen.RemoteNode(node_id=node_id, object_dictionary='/home/dyros/sh_ws/tocabi_mobile/dcf/cobra4812_node{}.dcf'.format(node_id))
@@ -169,9 +139,9 @@ class TocabiMobile():
         network.time.transmit()
         time.sleep(0.1)
 
-        # trans_type_ = 1
-        trans_type_ = 255
-        event_timer = 10
+        strans_type_ = 1
+        trans_type_ = 1
+        event_timer = 0
 
         # PDO Mapping
         """
@@ -211,16 +181,18 @@ class TocabiMobile():
             ##change RPDO configuration
             id_ = 1
             network[node_id].rpdo[id_].clear()
-            network[node_id].rpdo[id_].add_variable('motor_switch')  ##16bit
+            # network[node_id].rpdo[id_].add_variable('motor_switch')  ##16bit
             network[node_id].rpdo[id_].add_variable('mode_of_operation') ##16bit
+            network[node_id].rpdo[id_].trans_type = trans_type_
             #network[node_id].rpdo[id_].add_variable('motor enable/disable') ##16bit
             network[node_id].rpdo[id_].enabled = True
 
             id_ = 2
             network[node_id].rpdo[id_].clear()
-            network[node_id].rpdo[id_].add_variable('start motion')
+            # network[node_id].rpdo[id_].add_variable('start motion')
             network[node_id].rpdo[id_].add_variable('target velocity')
             network[node_id].rpdo[id_].add_variable('target current value')
+            network[node_id].rpdo[id_].trans_type = trans_type_
             # network[node_id].rpdo[id_].add_variable('velocity demand value')
             network[node_id].rpdo[id_].enabled = True
 
@@ -228,6 +200,7 @@ class TocabiMobile():
             network[node_id].rpdo[id_].clear()
             network[node_id].rpdo[id_].add_variable('clear error')
             network[node_id].rpdo[id_].add_variable('control word')
+            network[node_id].rpdo[id_].trans_type = trans_type_
             network[node_id].rpdo[id_].enabled = True
             # id_ = 3
             # network[node_id].rpdo[id_].clear()
@@ -263,7 +236,6 @@ class TocabiMobile():
             network[node_id].rpdo[1].transmit()
             time.sleep(0.1)
 
-        self.file = open("TextFile.txt", "w")
 
         self.change_status(status='STOPPED')
         self.change_status(status='RESET')
@@ -271,7 +243,6 @@ class TocabiMobile():
         self.change_status(status='INITIALISING')
         self.change_status(status='PRE-OPERATIONAL')
         self.change_status(status='OPERATIONAL')
-        sys.stdout.flush()
 
     def recovery(self):
         """
@@ -308,12 +279,13 @@ class TocabiMobile():
         self.change_status(status='RESET')
         self.change_status(status='RESET COMMUNICATION')
         self.change_status(status='INITIALISING')
-        sys.stdout.flush()
 
     def run(self):
         network = self.network
         try:
+
             while True:
+                self.network.sync.transmit()
                 """
                 Direction Reference:
                     network[1].rpdo['target velocity'].raw = cmd_fl
@@ -331,36 +303,17 @@ class TocabiMobile():
                     
                     network[node_id].rpdo['target velocity'].raw =  self.command[node_id]
                     ctrl_wrd = gen_controlword(sword_bin)
-
-                    if ctrl_wrd == CtrlWord.FAULT_RESET:
-                        if time.time() > self.start_time + 5.0:
-                            if  time.time() > self.last_fault_time[node_id] + self.fault_stop_delay:
-                                print(f'ID {node_id} -- fault detected ! reboot retry in {self.fault_stop_delay} sec')
-                                network[node_id].rpdo['motor_switch'].raw = 0
-                                network[node_id].rpdo['target velocity'].raw = 0
-                        self.last_fault_time[node_id] = time.time()
-
-                    if time.time() <= self.last_fault_time[node_id] + self.fault_stop_delay:
-                        network[node_id].rpdo['motor_switch'].raw = 0
-                        network[node_id].rpdo['target velocity'].raw = 0
-                    else:
-                        network[node_id].rpdo['motor_switch'].raw = 1
-                        network[node_id].rpdo['mode_of_operation'].raw = 3
-                        network[node_id].rpdo['start motion'].raw = 1
-                            
                     network[node_id].rpdo['control word'].raw = ctrl_wrd
                     network[node_id].rpdo[1].transmit()
                     network[node_id].rpdo[2].transmit()
                     network[node_id].rpdo[3].transmit()
-                        
+                    
                 self.periodic_print()
                 self.process_command()
 
                 remaining = max(0.005-(time.time() - self.old_time),0.0)
                 time.sleep(remaining)
                 self.old_time = time.time()
-                self.network.sync.transmit()
-                
                 
         except KeyboardInterrupt:
             print('safely stopping')
@@ -373,6 +326,7 @@ class TocabiMobile():
             self.change_status(status='INITIALISING')
             # self.change_status(status='STOPPED') # PLEASE DON'T IT WILL TERMINATE CAN COMM
             
+
     def periodic_print(self):
         """
         A. Periodical Print
@@ -387,12 +341,11 @@ class TocabiMobile():
             """
             # sword_bin = bin(network[3].tpdo['status word'].raw)
             # print( "n: {1} stat:{0:<32}\n".format(sword_bin, 1))
-            # print('')
-            # print('raw   cmd:', self.cmd.command, self.cmd.speed)
-            # print('motor cmd:', self.command[1:5])
-            # print('')
-            # sys.stdout.flush()
-            #print('pav: {}'.format(network[1].tpdo['position actual value'].raw))
+            print('')
+            print('raw   cmd:', self.cmd.command)
+            print('motor cmd:', self.command[1:5])
+            print('')
+            # print('pav: {}'.format(network[1].tpdo['position actual value'].raw))
             # print('cav: {}'.format(network[1].tpdo['current actual value'].raw))
 
     def process_command(self):
@@ -401,152 +354,21 @@ class TocabiMobile():
         arbitrary values are assigned 
         THIS WILL BE REPLACED BY "REAL COMM" CODES or just keyboard for fun?
         """
-        network = self.network
-        
-        vel_rad = float(network[1].tpdo['velocity actual value'].raw) / 9.55
-        vel_rad2 = float(network[2].tpdo['velocity actual value'].raw) / 9.55
-        vel_rad3 = -float(network[3].tpdo['velocity actual value'].raw) / 9.55
-        vel_rad4 = -float(network[4].tpdo['velocity actual value'].raw) / 9.55
-        #print(vel_rad,  vel_rad2, vel_rad3, vel_rad4)
 
-        # v_x, v_y, w;
+        cx, cy, cz = self.cmd.command 
+        speed_mod = self.cmd.speed # default = 100
+        angle_def = 0.5
 
+        speed_x = cy * speed_mod
+        speed_y = cx * speed_mod
+        speed_a = -cz * speed_mod * angle_def
 
-        cmd_x, cmd_y, cmd_theta = self.cmd.command 
-        booster = self.cmd.speed
-        
-        #velocity trash cmd handle
-        if cmd_x > 1.0 or cmd_x < -1.0:
-            print('commmand x error')
-            cmd_x = 0.0
-            cmd_y = 0.0
-            cmd_theta = 0.0
-        
-        if cmd_y > 1.0 or cmd_y < -1.0:
-            print('commmand y error')
-            cmd_x = 0.0
-            cmd_y = 0.0
-            cmd_theta = 0.0
-        
-        if cmd_theta > 1.0 or cmd_theta < -1.0:
-            print('commmand theta error')
-            cmd_x = 0.0
-            cmd_y = 0.0
-            cmd_theta = 0.0
+        self.command[1] =  (speed_y + speed_x + speed_a)
+        self.command[2] =  (speed_y - speed_x + speed_a)    
+        self.command[3] = -(speed_y - speed_x - speed_a)     
+        self.command[4] = -(speed_y + speed_x - speed_a)
 
-        # command filter
-        pi = 3.141592
-        del_t = 0.005
-        cutoff_freq = 2
-        cutoff_freq2 = 20
-        self.cmd_LPF[0] = 1/(1 + 2*pi*cutoff_freq*del_t)*self.cmd_LPF[0] + (2*pi*cutoff_freq*del_t)/(1 + 2*pi*cutoff_freq*del_t)*cmd_x
-        self.cmd_LPF[1] = 1/(1 + 2*pi*cutoff_freq*del_t)*self.cmd_LPF[1] + (2*pi*cutoff_freq*del_t)/(1 + 2*pi*cutoff_freq*del_t)*cmd_y
-        self.cmd_LPF[2] = 1/(1 + 2*pi*cutoff_freq*del_t)*self.cmd_LPF[2] + (2*pi*cutoff_freq*del_t)/(1 + 2*pi*cutoff_freq*del_t)*cmd_theta
-        # print(cmd_x , self.cmd_LPF[0])
-        # print(cmd_y , self.cmd_LPF[1])
-        # print(cmd_theta , self.cmd_LPF[2])
-        
-        # velocity mapping
-        vel_x_max = 1.0
-        vel_y_max = 1.0
-        vel_theta_max = 1.0
-
-        vel_x_min = 0.2
-        vel_y_min = 0.2
-        vel_theta_min = 0.2
-
-        cmd_x_dead = 0.2
-        cmd_y_dead = 0.2
-        cmd_theta_dead = 0.2
-
-        R_wheel = 0.091
-        Length_1 = 0.287
-        Length_2 = 0.255
-        l1_l2 = 1.0/(Length_1 + Length_2)
-        vel_x_real = R_wheel/4.0*(vel_rad + vel_rad2 + vel_rad3 + vel_rad4)
-        vel_y_real = R_wheel/4.0*(-vel_rad + vel_rad2 + vel_rad3 - vel_rad4)
-        vel_th_real = R_wheel/4.0*l1_l2*(-vel_rad - vel_rad2 + vel_rad3 + vel_rad4)
-
-        self.vel_x_LPF = 1/(1 + 2*pi*cutoff_freq2*del_t)*self.vel_x_LPF + (2*pi*cutoff_freq2*del_t)/(1 + 2*pi*cutoff_freq2*del_t)*vel_x_real
-        self.vel_x_dot = (self.vel_x_LPF - self.vel_x_LPF_prev)/del_t
-        self.vel_x_LPF_prev = self.vel_x_LPF
-
-        self.vel_y_LPF = 1/(1 + 2*pi*cutoff_freq2*del_t)*self.vel_y_LPF + (2*pi*cutoff_freq2*del_t)/(1 + 2*pi*cutoff_freq2*del_t)*vel_y_real
-        self.vel_y_dot = (self.vel_y_LPF - self.vel_y_LPF_prev)/del_t
-        self.vel_y_LPF_prev = self.vel_y_LPF        
-
-
-        self.theta_LPF = 1/(1 + 2*pi*cutoff_freq2*del_t)*self.theta_LPF + (2*pi*cutoff_freq2*del_t)/(1 + 2*pi*cutoff_freq2*del_t)*vel_th_real
-        self.theta_dot = (self.theta_LPF - self.theta_LPF_prev)/del_t
-        self.theta_LPF_prev = self.theta_LPF
-
-        #velocity calc
-        #vel_x = vel_x_max*(self.cmd_LPF[0])
-        #if(self.cmd_LPF[0] < cmd_x_dead and self.cmd_LPF[0] > -cmd_x_dead ):
-        #    vel_x = 0
-        #else:
-        #    vel_x = ((vel_x_max - vel_x_min)/(1 - cmd_x_dead))*(self.cmd_LPF[0] - cmd_x_dead) + vel_x_min
-        #vel_x = 0
-        vel_x = vel_x_max*(self.cmd_LPF[0])
-        vel_y = vel_y_max*(-self.cmd_LPF[1])
-
-
-        #vel_y = - 0.05
-
-        ###############################################
-        #kp = 0.5
-        #ki = 0.04
-        #desired_theta = 0.0
-        #desired_x = 0.1        
-        #error = desired_theta - self.theta_LPF
-        #self.intergral_ += error
-        
-        ############## Keunwoo's best gain tuning ##############
-        #vel_theta = desired_theta - 0.05*self.theta_dot#+ ki * self.intergral_# + kp*error + ki * self.intergral_  #vel_theta_max*(self.cmd_LPF[2])
-        #vel_x = desired_x - 0.3*self.vel_x_dot
-        #vel_y = desired_y - 0.3*self.vel_y_dot
-        ###############################################
-
-        #print("cmd x", self.cmd_LPF[0])
-        #print("vel x", vel_x)
-
-        vel_x = vel_x_max*(cmd_x)
-        vel_y = vel_y_max*(-cmd_y)
-        vel_theta = vel_theta_max*(cmd_theta)
-
-        # kinematics
-
-
-        # vel_x forward plus
-        # vel_y left plus
-        w_1 = (vel_x - vel_y - (Length_1 + Length_2)*vel_theta)/R_wheel
-        w_2 = (vel_x + vel_y - (Length_1 + Length_2)*vel_theta)/R_wheel
-        w_3 = (vel_x + vel_y + (Length_1 + Length_2)*vel_theta)/R_wheel
-        w_4 = (vel_x - vel_y + (Length_1 + Length_2)*vel_theta)/R_wheel
-
-        #lines = str(vel_rad) +' '+ str(vel_rad2) +' '+ str(vel_rad3)+' '+str(vel_rad4)+' '+ str(w_1)+' '+ str(w_2)+' '+ str(w_3)+' '+ str(w_4)
-        # lines = str(vel_x) +' '+ str(vel_y) +' '+ str(vel_theta)+' '+str(vel_x_real)+' '+ str(vel_y_real)+' '+ str(vel_th_real) + ' '+ str(self.vel_x_dot) + ' '+ str(self.vel_y_dot) + ' '+ str(self.theta_dot) 
-
-        
-
-        # self.file.write(lines)
-        # self.file.write('\n')
-
-
-
-        # motor 3,4 axis direction mapping
-        # rad/s -> rpm
-        rad2rpm = 9.55
-        self.command[1] =  rad2rpm * w_1#front_left
-        self.command[2] =  rad2rpm * w_2#back_left  
-        self.command[3] =  -rad2rpm * w_3#front_right    
-        self.command[4] =  -rad2rpm * w_4#back_right
-
-        #speed_x = cy * speed_mod
-        #speed_y = cx * speed_mod
-        #speed_a = -cz * speed_mod * angle_def
-
-        #self.command[1] =  (speed_y + speed_x + speed_a) #front_left
-        #self.command[2] =  (speed_y - speed_x + speed_a) #back_left  
-        #self.command[3] = -(speed_y - speed_x - speed_a) #front_right    
-        #self.command[4] = -(speed_y + speed_x - speed_a) #back_right
+if __name__ == "__main__":
+    tm = TocabiMobile()
+    tm.connect()
+    tm.run()
